@@ -12,12 +12,13 @@ from airflow.providers.amazon.aws.operators.ec2 import (
 
 import datetime
 
-DAG_NAME = "teardown-cassandra"
+DAG_NAME = "teardown-cassandra-cluster"
 instance_id = "xxx"
 
 with DAG(
         dag_id=DAG_NAME,
         tags=["cassandra"],
+        schedule_interval=None,
         params={
 
         },

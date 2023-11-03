@@ -1,26 +1,19 @@
+from airflow.decorators import dag, task
 from airflow import DAG
-from airflow.example_dags.subdags.subdag import subdag
 from airflow.models import Param
-from airflow.operators.empty import EmptyOperator
-from airflow.operators.subdag import SubDagOperator
 from airflow.providers.amazon.aws.sensors.ec2 import EC2InstanceStateSensor
-from airflow.decorators import task
+from operators.ec2 import CreateVPCOperator
 
 from airflow.providers.amazon.aws.operators.ec2 import (
     EC2CreateInstanceOperator,
-    EC2StartInstanceOperator,
+    EC2StartInstanceOperator
 )
+
+# Example dags: https://github.com/apache/airflow/tree/providers-amazon/3.2.0/airflow/providers/amazon/aws/example_dags
 
 import datetime
 
-DAG_NAME = "provision-cassandra"
-image_id = ""
-
-
-@task
-def parse_response(instance_ids: list):
-    return instance_ids[0]
-
+DAG_NAME = "provision-cassandra-cluster"
 
 # https://instances.vantage.sh/?min_memory=32&min_vcpus=8&min_storage=100&region=us-west-2&selected=c5d.xlarge,r6gd.large
 with DAG(
@@ -28,15 +21,20 @@ with DAG(
         default_args={"retries": 2},
         tags=["cassandra"],
         start_date=datetime.datetime(2023, 1, 1),
+        schedule_interval=None,
+        render_template_as_native_obj=True,
         params={
             "instance_type": Param("c5d.xlarge",
                                    enum=["c5d.xlarge"],
                                    values_display={
                                        "c5d.xlarge": "c5.xlarge (8GB, 4CPU, 1x100GB NVMe)",
                                    }),
+            "region": Param("us-west-2",
+                            enum=["us-west-2"]),
             "number_of_instances": Param(3, type="integer", minimum=1, maximum=30),
             "cluster_name": Param("test", type="string", maxLength=30),
-            "ami": Param("ami-0fc5d935ebf8bc3bc", type="string")
+            "ami": Param("ami-099650fa48ff54238", type="string"),
+            "key_name": Param("rrboct23", enum=["rrboct23"])
         }
 ) as dag:
     # test_context = sys_test_context_task()
@@ -46,7 +44,7 @@ with DAG(
     instance_id = "instance_id"
 
     config = {
-        "InstanceType": "t4g.micro",
+        "InstanceType": "{{ params.instance_type }}",
         "KeyName": key_name,
         "TagSpecifications": [
             {"ResourceType": "instance", "Tags": [{"Key": "Name", "Value": instance_name}]}
@@ -56,12 +54,24 @@ with DAG(
         "MetadataOptions": {"HttpEndpoint": "enabled", "HttpTokens": "required"},
     }
 
+    # create VPC
+    create_vpc = CreateVPCOperator(
+        task_id="create_vpc",
+        vpc_name="test",
+        retries=0,
+    )
+
+
+    # create security group
+
     create_instance = EC2CreateInstanceOperator(
         task_id="create_instance",
         image_id="{{ params.ami }}",
-        max_count=1,
-        min_count=1,
+        max_count="{{ params.number_of_instances }}",
+        min_count="{{ params.number_of_instances }}",
         config=config,
+        region_name="{{ params.region }}",
+        # config={"VpcId": create_vpc.}
     )
 
     create_instance.wait_for_completion = True
@@ -69,12 +79,17 @@ with DAG(
     start_instance = EC2StartInstanceOperator(
         task_id="start_instance",
         instance_id=instance_id,
+        region_name="{{ params.region }}"
     )
+
+    start_instance.wait_for_completion = True
 
     await_instance = EC2InstanceStateSensor(
         task_id="await_instance",
         instance_id=instance_id,
         target_state="running",
+        region_name="{{ params.region }}"
     )
 
-    create_instance >> start_instance >> await_instance
+    create_vpc >> create_instance >> start_instance >> await_instance
+
