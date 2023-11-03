@@ -1,13 +1,8 @@
-from airflow.decorators import dag, task
-from airflow import DAG
-from airflow.models import Param
-from airflow.providers.amazon.aws.sensors.ec2 import EC2InstanceStateSensor
-from operators.ec2 import CreateVPCOperator
+import logging
 
-from airflow.providers.amazon.aws.operators.ec2 import (
-    EC2CreateInstanceOperator,
-    EC2StartInstanceOperator
-)
+from airflow.decorators import dag, task
+from airflow.models import Param
+from airflow.providers.amazon.aws.hooks.ec2 import EC2Hook
 
 # Example dags: https://github.com/apache/airflow/tree/providers-amazon/3.2.0/airflow/providers/amazon/aws/example_dags
 
@@ -15,81 +10,103 @@ import datetime
 
 DAG_NAME = "provision-cassandra-cluster"
 
-# https://instances.vantage.sh/?min_memory=32&min_vcpus=8&min_storage=100&region=us-west-2&selected=c5d.xlarge,r6gd.large
-with DAG(
-        dag_id=DAG_NAME,
-        default_args={"retries": 2},
-        tags=["cassandra"],
-        start_date=datetime.datetime(2023, 1, 1),
-        schedule_interval=None,
-        render_template_as_native_obj=True,
-        params={
-            "instance_type": Param("c5d.xlarge",
-                                   enum=["c5d.xlarge"],
-                                   values_display={
-                                       "c5d.xlarge": "c5.xlarge (8GB, 4CPU, 1x100GB NVMe)",
-                                   }),
-            "region": Param("us-west-2",
-                            enum=["us-west-2"]),
-            "number_of_instances": Param(3, type="integer", minimum=1, maximum=30),
-            "cluster_name": Param("test", type="string", maxLength=30),
-            "ami": Param("ami-099650fa48ff54238", type="string"),
-            "key_name": Param("rrboct23", enum=["rrboct23"])
+dag_params = {
+    "cluster_name": Param("test" + datetime.datetime.now().strftime("%Y%m%d%H%M%S")),
+    "instance_type": Param("c5d.xlarge",
+                           enum=["c5d.xlarge"],
+                           values_display={
+                               "c5d.xlarge": "c5.xlarge (8GB, 4CPU, 1x100GB NVMe)",
+                           }),
+    "region": "us-west-2",
+    "number_of_instances": Param(3, type="integer", minimum=1, maximum=30),
+}
+
+
+@dag(dag_id=DAG_NAME,
+     schedule_interval=None,
+     start_date=datetime.datetime(2023, 1, 1),
+     tags=["cassandra"],
+     params=dag_params)
+def provision_cassandra_cluster():
+    # new task to create vpc
+    @task()
+    def create_vpc(params=None):
+        region_name = params["region"]
+        cluster_name = params["cluster_name"]
+
+        # boto create vpc
+        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=region_name).conn
+        vpc_id = ec2.create_vpc(
+            CidrBlock="10.0.0.0/16"
+        ).id
+
+        ec2.create_tags(
+            Resources=[vpc_id],
+            Tags=[{'Key': 'Name', 'Value': cluster_name}]
+        )
+
+        return vpc_id
+
+    # taskflow task that creates a VPC subnet
+    @task()
+    def create_subnet(vpc_id: str, params=None):
+        region_name = params["region"]
+        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=region_name).conn
+        subnet = ec2.create_subnet(
+            CidrBlock="10.0.0.0/16",
+            VpcId=vpc_id
+        )
+        return subnet.id
+
+    # new task to create security group
+    @task()
+    def create_security_group(vpc_id: str, params=None):
+        region_name = params["region"]
+        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=region_name).conn
+
+        sg_response = ec2.create_security_group(
+            GroupName='my_security_group',
+            Description='My security group',
+            VpcId=vpc_id
+        )
+        security_group_id = sg_response.id
+        print(f"Created Security Group: {security_group_id}")
+
+        # Add a rule to allow SSH access (optional)
+        ec2.authorize_security_group_ingress(
+            GroupId=security_group_id,
+            IpProtocol='tcp',
+            FromPort=22,
+            ToPort=22,
+            CidrIp='0.0.0.0/0'
+        )
+        return security_group_id
+
+    @task(multiple_outputs=True)
+    def create_ec2_instances(subnet_id, security_group_id, params=None):
+        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=params["region"]).conn
+        instances = ec2.create_instances(
+            ImageId='ami-12345',  # Replace with a valid AMI ID
+            MinCount=params.number_of_instances,
+            MaxCount=params.number_of_instances,
+            InstanceType='t2.micro',
+            SecurityGroupIds=[security_group_id],
+            SubnetId=subnet_id,
+            TagSpecifications=[{
+                'ResourceType': 'instance',
+                'Tags': [{'Key': 'Name', 'Value': 'MyInstance'}]
+            }]
+        )
+        instance_ids = [instance.id for instance in instances]
+        print(f"Created EC2 Instances: {instance_ids}")
+        return {
+            'instance_ids': instance_ids
         }
-) as dag:
-    # test_context = sys_test_context_task()
 
-    key_name = "test"
-    instance_name = f"cassandra-instance"
-    instance_id = "instance_id"
-
-    config = {
-        "InstanceType": "{{ params.instance_type }}",
-        "KeyName": key_name,
-        "TagSpecifications": [
-            {"ResourceType": "instance", "Tags": [{"Key": "Name", "Value": instance_name}]}
-        ],
-        # Use IMDSv2 for greater security, see the following doc for more details:
-        # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html
-        "MetadataOptions": {"HttpEndpoint": "enabled", "HttpTokens": "required"},
-    }
-
-    # create VPC
-    create_vpc = CreateVPCOperator(
-        task_id="create_vpc",
-        vpc_name="test",
-        retries=0,
-    )
+    vpc = create_vpc()
+    subnet_id = create_subnet(vpc)
+    security_group_id = create_security_group(vpc)
+    create_ec2_instances(subnet_id, security_group_id)
 
 
-    # create security group
-
-    create_instance = EC2CreateInstanceOperator(
-        task_id="create_instance",
-        image_id="{{ params.ami }}",
-        max_count="{{ params.number_of_instances }}",
-        min_count="{{ params.number_of_instances }}",
-        config=config,
-        region_name="{{ params.region }}",
-        # config={"VpcId": create_vpc.}
-    )
-
-    create_instance.wait_for_completion = True
-
-    start_instance = EC2StartInstanceOperator(
-        task_id="start_instance",
-        instance_id=instance_id,
-        region_name="{{ params.region }}"
-    )
-
-    start_instance.wait_for_completion = True
-
-    await_instance = EC2InstanceStateSensor(
-        task_id="await_instance",
-        instance_id=instance_id,
-        target_state="running",
-        region_name="{{ params.region }}"
-    )
-
-    create_vpc >> create_instance >> start_instance >> await_instance
-
+my_tag = provision_cassandra_cluster()
