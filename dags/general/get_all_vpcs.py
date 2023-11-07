@@ -5,11 +5,11 @@ from airflow.decorators import dag, task
 from airflow.providers.amazon.aws.hooks.ec2 import EC2Hook
 from airflow.models import Variable
 
-from globals import JLT_VPC_LIST
+from globals import JLT_VPC_LIST, JLT_DEFAULT_REGION
 
 DAG_NAME = "GetAllVPCs"
 DAG_PARAMS = {
-    "region": "us-west-2",
+    "region": JLT_DEFAULT_REGION
 }
 
 
@@ -35,7 +35,7 @@ def get_all_vpcs():
                     vpc_name = tag['Value']
                     break
             vpc_names.append(vpc_name)
-            Variable.set(JLT_VPC_LIST, vpc_names)
+            Variable.set(JLT_VPC_LIST, vpc_names, serialize_json=True)
 
     get_and_store_all_vpcs()
 

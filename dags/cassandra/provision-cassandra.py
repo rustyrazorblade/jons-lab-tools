@@ -1,7 +1,7 @@
 import logging
 
 from airflow.decorators import dag, task
-from airflow.models import Param
+from airflow.models import Param, Variable
 from airflow.providers.amazon.aws.hooks.ec2 import EC2Hook
 
 # Example dags: https://github.com/apache/airflow/tree/providers-amazon/3.2.0/airflow/providers/amazon/aws/example_dags
@@ -10,7 +10,12 @@ import datetime
 
 from airflow.sensors.base import PokeReturnValue
 
+from globals import JLT_VPC_LIST, JLT_DEFAULT_REGION, JLT_DEFAULT_VPC
+
 DAG_NAME = "provision-cassandra-cluster"
+
+vpcs = Variable.get(JLT_VPC_LIST, deserialize_json=True)
+default_vpc = JLT_DEFAULT_VPC if JLT_DEFAULT_VPC in vpcs else vpcs[0]
 
 dag_params = {
     "cluster_name": Param("test" + datetime.datetime.now().strftime("%Y%m%d%H%M%S")),
@@ -19,8 +24,9 @@ dag_params = {
                            values_display={
                                "c5d.xlarge": "c5.xlarge (8GB, 4CPU, 1x100GB NVMe)",
                            }),
-    "region": "us-west-2",
+    "region": JLT_DEFAULT_REGION,
     "number_of_instances": Param(3, type="integer", minimum=1, maximum=30),
+    "vpc": Param(default_vpc, enum=vpcs)
 }
 
 

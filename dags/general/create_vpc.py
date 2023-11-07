@@ -10,14 +10,16 @@ import datetime
 
 from airflow.sensors.base import PokeReturnValue
 
+from globals import JLT_DEFAULT_VPC, JLT_DEFAULT_REGION
+
 # :param api_type: If set to ``client_type`` then hook use ``boto3.client("ec2")`` capabilities,
 # If set to ``resource_type`` then hook use ``boto3.resource("ec2")`` capabilities.
 
 DAG_NAME = "provision_vpc"
 
 dag_params = {
-    "vpc_name": "jlt",
-    "region": "us-west-2",
+    "vpc_name": JLT_DEFAULT_VPC,
+    "region": JLT_DEFAULT_REGION
 }
 
 
