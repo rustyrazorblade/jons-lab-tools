@@ -24,6 +24,7 @@ class DagParams(Enum):
     INSTANCE_TYPE = "instance_type"
     REGION = "region"
     NUMBER_OF_INSTANCES = "number_of_instances"
+    # VPC Picker
     VPC = "vpc"
     UBUNTU_AMI = "ubuntu_ami"
     BASE_AMI = "base_ami"

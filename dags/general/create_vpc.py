@@ -8,7 +8,7 @@ import datetime
 from airflow.sensors.base import PokeReturnValue
 
 from general.common import get_ec2
-from globals import JLT_DEFAULT_VPC, JLT_DEFAULT_REGION, DagValues
+from globals import JLT_DEFAULT_VPC, JLT_DEFAULT_REGION
 
 # :param api_type: If set to ``client_type`` then hook use ``boto3.client("ec2")`` capabilities,
 # If set to ``resource_type`` then hook use ``boto3.resource("ec2")`` capabilities.
@@ -35,7 +35,8 @@ def provision_vpc():
         # boto create vpc
         ec2 = EC2Hook(aws_conn_id="aws_default", region_name=region_name).conn
         vpc_id = ec2.create_vpc(
-            CidrBlock="10.0.0.0/16"
+            CidrBlock="10.0.0.0/16",
+            AmazonProvidedIpv6CidrBlock=True
         ).id
 
         ec2.create_tags(
@@ -119,11 +120,29 @@ def provision_vpc():
         )
         return None
 
+    # @task
+    # def create_route_ipv6(route_table_id, igw_id, params=None):
+    #     ec2 = get_ec2(params)
+    #
+    #     route_table = ec2.RouteTable(route_table_id)
+    #     internet_gateway = ec2.InternetGateway(igw_id)
+    #     route_ig_ipv6 = route_table.create_route(DestinationIpv6CidrBlock='::/0',
+    #                                              GatewayId=internet_gateway.internet_gateway_id)
+    #     return route_ig_ipv6
+
     @task
     def associate_subnet(subnet_id, route_table_id, params=None):
         ec2 = EC2Hook(aws_conn_id="aws_default", region_name=params["region"]).conn
         route_table = ec2.RouteTable(route_table_id)
         route_table.associate_with_subnet(SubnetId=subnet_id)
+
+    # @task
+    # def associate_ipv6(vpc_id, params=None):
+    #     ec2 = get_ec2(params)
+    #     ipv6_cidr_block = ec2.associate_vpc_cidr_block(
+    #         AmazonProvidedIpv6CidrBlock=True,
+    #         VpcId=vpc_id
+    #     )['VpcIpv6CidrBlockAssociation']['Ipv6CidrBlock']
 
     vpc = wait_for_vpc(create_vpc())
     routing_table = create_routing_table(vpc)
@@ -134,7 +153,6 @@ def provision_vpc():
     for idx, az in enumerate(azs):
         subnet[az] = create_subnet(vpc,  f'10.0.{idx}.0/24', az)
         associate_subnet(subnet[az], routing_table)
-    #     ec2_client.associate_route_table(SubnetId=subnet_id, RouteTableId=route_table_id)
 
     security_group_id = create_security_group(vpc)
     authorize_ingress(security_group_id)
@@ -145,6 +163,7 @@ def provision_vpc():
 
     # routing table
     create_route(routing_table, igw_gateway_id)
+    # create_route_ipv6(routing_table, igw_gateway_id)
 
 
     # new task that accepts a tag name and fetches all instances with that tag

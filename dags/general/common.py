@@ -12,6 +12,9 @@ def get_ec2(params):
                    region_name=params[DagParams.REGION.value]).conn
 
 
+"""
+Works in tandem with the DagParams.VPC parameter
+"""
 @task()
 def get_vpc(params=None):
     dag = DagValues(params)
@@ -73,3 +76,7 @@ def wait_for_instance(instance_id, params=None):
         return PokeReturnValue(is_done=False)
 
     return PokeReturnValue(is_done=True)
+
+@task
+def enable_ipv6(vpc_id, params):
+    ec2 = get_ec2(params)

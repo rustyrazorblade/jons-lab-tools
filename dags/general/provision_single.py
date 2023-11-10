@@ -2,7 +2,8 @@ import datetime
 
 from airflow.decorators import dag
 
-from general.common import get_vpc, get_security_group, get_subnets, provision_instance, wait_for_instance
+from general.common import get_vpc, get_security_group, \
+    get_subnets, provision_instance, wait_for_instance
 
 from globals import DagParams, get_dag_params
 

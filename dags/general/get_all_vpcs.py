@@ -14,7 +14,7 @@ DAG_PARAMS = {
 
 
 @dag(dag_id=DAG_NAME,
-     schedule_interval=None,
+     schedule="@hourly",
      start_date=datetime(2023, 1, 1),
      tags=["aws"],
      params=DAG_PARAMS)
