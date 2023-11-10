@@ -25,6 +25,9 @@ class DagParams(Enum):
     REGION = "region"
     NUMBER_OF_INSTANCES = "number_of_instances"
     VPC = "vpc"
+    UBUNTU_AMI = "ubuntu_ami"
+    BASE_AMI = "base_ami"
+    NAME = "name"
 
 
 def get_default_dag_params():
@@ -37,7 +40,9 @@ def get_default_dag_params():
                                }),
         DagParams.REGION: JLT_DEFAULT_REGION,
         DagParams.NUMBER_OF_INSTANCES: Param(3, type="integer", enum=[3, 6, 9, 12]),
-        DagParams.VPC: Param(get_default_vpc_option(), enum=get_vpc_options())
+        DagParams.VPC: Param(get_default_vpc_option(), enum=get_vpc_options()),
+        DagParams.UBUNTU_AMI: Param(JLT_DEFAULT_BASE_AMI),
+        DagParams.NAME: Param("test_" + datetime.datetime.now().strftime("H%M"))
     }
 
 

@@ -19,6 +19,7 @@ dag_params = get_dag_params(DagParams.CLUSTER_NAME,
                             DagParams.VPC)
 logging.info("dag params: %s", dag_params)
 
+
 @dag(dag_id=DAG_NAME,
      schedule_interval=None,
      start_date=datetime.datetime(2023, 1, 1),
