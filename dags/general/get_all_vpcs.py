@@ -7,7 +7,7 @@ from airflow.models import Variable
 
 from globals import JLT_VPC_LIST, JLT_DEFAULT_REGION
 
-DAG_NAME = "GetAllVPCs"
+DAG_NAME = "get_all_vpcs"
 DAG_PARAMS = {
     "region": JLT_DEFAULT_REGION
 }

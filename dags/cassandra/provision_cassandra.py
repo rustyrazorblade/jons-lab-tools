@@ -1,7 +1,6 @@
 import logging
 
 from airflow.decorators import dag, task
-from airflow.models import Param, Variable
 from airflow.providers.amazon.aws.hooks.ec2 import EC2Hook
 
 # Example dags: https://github.com/apache/airflow/tree/providers-amazon/3.2.0/airflow/providers/amazon/aws/example_dags
@@ -10,25 +9,15 @@ import datetime
 
 from airflow.sensors.base import PokeReturnValue
 
-from globals import JLT_VPC_LIST, JLT_DEFAULT_REGION, JLT_DEFAULT_VPC, JLT_DEFAULT_BASE_AMI
+from globals import JLT_DEFAULT_BASE_AMI, DagParams, get_dag_params
 
-DAG_NAME = "provision-cassandra-cluster"
-
-vpcs = Variable.get(JLT_VPC_LIST, deserialize_json=True)
-default_vpc = JLT_DEFAULT_VPC if JLT_DEFAULT_VPC in vpcs else vpcs[0]
-
-dag_params = {
-    "cluster_name": Param("test" + datetime.datetime.now().strftime("%Y%m%d%H%M%S")),
-    "instance_type": Param("c5d.xlarge",
-                           enum=["c5d.xlarge"],
-                           values_display={
-                               "c5d.xlarge": "c5.xlarge (8GB, 4CPU, 1x100GB NVMe)",
-                           }),
-    "region": JLT_DEFAULT_REGION,
-    "number_of_instances": Param(3, type="integer", enum=[3, 6, 9, 12]),
-    "vpc": Param(default_vpc, enum=vpcs)
-}
-
+DAG_NAME = "provision_cassandra_cluster"
+dag_params = get_dag_params(DagParams.CLUSTER_NAME,
+                            DagParams.INSTANCE_TYPE,
+                            DagParams.REGION,
+                            DagParams.NUMBER_OF_INSTANCES,
+                            DagParams.VPC)
+logging.info("dag params: %s", dag_params)
 
 @dag(dag_id=DAG_NAME,
      schedule_interval=None,
@@ -36,8 +25,10 @@ dag_params = {
      tags=["cassandra"],
      params=dag_params)
 def provision_cassandra_cluster():
-    # new task to create vpc
-    # new task to create security group
+    """
+    Provision a Cassandra cluster in AWS
+    :return:
+    """
 
     @task
     def get_vpc(params=None):
