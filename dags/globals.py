@@ -30,14 +30,34 @@ class DagParams(Enum):
     NAME = "name"
 
 
+class DagValues:
+    def __init__(self, params):
+        self.cluster_name = params.get(DagParams.CLUSTER_NAME.value, None)
+        self.instance_type = params.get(DagParams.INSTANCE_TYPE.value, None)
+        self.region = params.get(DagParams.REGION.value, None)
+        self.number_of_instances = params.get(DagParams.NUMBER_OF_INSTANCES.value, None)
+        self.vpc = params.get(DagParams.VPC.value, None)
+        self.ubuntu_ami = params.get(DagParams.UBUNTU_AMI.value, None)
+        self.name = params.get(DagParams.NAME.value, None)
+
+
+class Tag(Enum):
+    TYPE = "type"
+
+
+class InstanceType(Enum):
+    CASSANDRA = "cassandra"
+    KAFKA = "kafka"
+
+
 def get_default_dag_params():
     return {
         DagParams.CLUSTER_NAME: Param("test" + datetime.datetime.now().strftime("%Y%m%d%H%M%S")),
         DagParams.INSTANCE_TYPE: Param("c5d.xlarge",
-                               enum=["c5d.xlarge"],
-                               values_display={
-                                   "c5d.xlarge": "c5.xlarge (8GB, 4CPU, 1x100GB NVMe)",
-                               }),
+                                       enum=["c5d.xlarge"],
+                                       values_display={
+                                           "c5d.xlarge": "c5.xlarge (8GB, 4CPU, 1x100GB NVMe)",
+                                       }),
         DagParams.REGION: JLT_DEFAULT_REGION,
         DagParams.NUMBER_OF_INSTANCES: Param(3, type="integer", enum=[3, 6, 9, 12]),
         DagParams.VPC: Param(get_default_vpc_option(), enum=get_vpc_options()),
@@ -52,4 +72,3 @@ def get_dag_params(*args: DagParams):
     tmp = {key.value: d[key] for key in args if key in d.keys()}
     logging.info("dag params: %s", tmp)
     return tmp
-

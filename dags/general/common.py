@@ -4,7 +4,7 @@ from airflow.decorators import task
 from airflow.providers.amazon.aws.hooks.ec2 import EC2Hook
 from airflow.sensors.base import PokeReturnValue
 
-from globals import DagParams
+from globals import DagParams, DagValues
 
 
 def get_ec2(params):
@@ -14,10 +14,11 @@ def get_ec2(params):
 
 @task()
 def get_vpc(params=None):
-    logging.info("Fetching VPCs in %s", params[DagParams.REGION.value])
+    dag = DagValues(params)
+    logging.info("Fetching VPCs in %s", dag.region)
     ec2 = get_ec2(params)
 
-    filters = [{'Name': 'tag:Name', 'Values': [params[DagParams.VPC.value]]}]
+    filters = [{'Name': 'tag:Name', 'Values': [dag.vpc]}]
     vpc = list(ec2.vpcs.filter(Filters=filters))[0]
     return vpc.id
 
@@ -42,14 +43,18 @@ def get_security_group(vpc_id, params=None):
 
 
 @task()
-def provision_instance(security_group_id, subnets, params=None):
+def provision_instance(security_group_id, subnets, tags=None, params=None):
+    if tags is None:
+        tags = dict()
+
+    dag = DagValues(params)
     ec2 = get_ec2(params)
     subnet_id = subnets[0]
     instances = ec2.create_instances(
-        ImageId=params[DagParams.UBUNTU_AMI.value],  # Replace with a valid AMI ID
+        ImageId=dag.ubuntu_ami,
         MinCount=1,
         MaxCount=1,
-        InstanceType=params["instance_type"],
+        InstanceType=dag.instance_type,
         SecurityGroupIds=[security_group_id],
         SubnetId=subnet_id,
         TagSpecifications=[{

@@ -1,7 +1,4 @@
-import logging
-
 from airflow.decorators import dag, task
-from airflow.models import Param
 from airflow.providers.amazon.aws.hooks.ec2 import EC2Hook
 
 # Example dags: https://github.com/apache/airflow/tree/providers-amazon/3.2.0/airflow/providers/amazon/aws/example_dags
@@ -10,7 +7,8 @@ import datetime
 
 from airflow.sensors.base import PokeReturnValue
 
-from globals import JLT_DEFAULT_VPC, JLT_DEFAULT_REGION
+from general.common import get_ec2
+from globals import JLT_DEFAULT_VPC, JLT_DEFAULT_REGION, DagValues
 
 # :param api_type: If set to ``client_type`` then hook use ``boto3.client("ec2")`` capabilities,
 # If set to ``resource_type`` then hook use ``boto3.resource("ec2")`` capabilities.
@@ -149,5 +147,13 @@ def provision_vpc():
     create_route(routing_table, igw_gateway_id)
 
 
+    # new task that accepts a tag name and fetches all instances with that tag
+    @task()
+    def get_instances_by_tag(tag_name: str, tag_value: str, params=None):
+        ec2 = get_ec2(params)
+        instances = ec2.instances.filter(
+            Filters=[{'Name': f'tag:{tag_name}', 'Values': [tag_value]}])
+        # return a list of named tuples for the instances id and tag name
+        return [(instance.id, instance.tags[0]['Value']) for instance in instances]
 
 my_tag = provision_vpc()
