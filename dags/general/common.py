@@ -64,7 +64,14 @@ def provision_instance(security_group_id, subnets, tags=None, params=None):
             'ResourceType': 'instance',
             'Tags': [{'Key': 'Name', 'Value': 'MyInstance'}]
         }])
-    return list(instances)[0].id
+
+    instance = list(instances)[0]
+    ipv6_addresses = []
+    for network_interface in instance.network_interfaces_attribute:
+        for ipv6_address_info in network_interface.get('Ipv6Addresses', []):
+            ipv6_addresses.append(ipv6_address_info['Ipv6Address'])
+    logging.info("Created instance %s with address %s", instance.id, ipv6_addresses)
+    return instance.id
 
 
 @task.sensor(poke_interval=30, timeout=600, mode="reschedule")
@@ -77,6 +84,12 @@ def wait_for_instance(instance_id, params=None):
 
     return PokeReturnValue(is_done=True)
 
-@task
-def enable_ipv6(vpc_id, params):
+
+# new task that accepts a tag name and fetches all instances with that tag
+@task()
+def get_instances_by_tag(tag_name: str, tag_value: str, params=None):
     ec2 = get_ec2(params)
+    instances = ec2.instances.filter(
+        Filters=[{'Name': f'tag:{tag_name}', 'Values': [tag_value]}])
+    # return a list of named tuples for the instances id and tag name
+    return [(instance.id, instance.tags[0]['Value']) for instance in instances]

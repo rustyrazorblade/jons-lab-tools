@@ -8,6 +8,7 @@ from globals import DagParams, get_dag_params, DagValues
 dag_params = get_dag_params(DagParams.VPC, DagParams.REGION)
 DAG_NAME = "delete_vpc"
 
+# https://stackoverflow.com/questions/53519058/how-to-delete-vpc-with-all-its-dependencies-using-boto3
 
 @dag(dag_id=DAG_NAME,
      schedule=None,
