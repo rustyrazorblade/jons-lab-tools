@@ -42,7 +42,7 @@ def get_default_dag_params():
         DagParams.NUMBER_OF_INSTANCES: Param(3, type="integer", enum=[3, 6, 9, 12]),
         DagParams.VPC: Param(get_default_vpc_option(), enum=get_vpc_options()),
         DagParams.UBUNTU_AMI: Param(JLT_DEFAULT_BASE_AMI),
-        DagParams.NAME: Param("test_" + datetime.datetime.now().strftime("H%M"))
+        DagParams.NAME: Param("test_" + datetime.datetime.now().strftime("%H_%M"))
     }
 
 
