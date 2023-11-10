@@ -30,10 +30,10 @@ def provision_vpc():
     # new task to create vpc
     @task()
     def create_vpc(params=None):
-        region_name = params["region"]
+        dv = DagValues(params)
 
         # boto create vpc
-        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=region_name).conn
+        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=dv.region).conn
         vpc_id = ec2.create_vpc(
             CidrBlock="10.0.0.0/16",
             AmazonProvidedIpv6CidrBlock=True
@@ -48,7 +48,7 @@ def provision_vpc():
 
     @task.sensor(poke_interval=30, timeout=600, mode="reschedule")
     def wait_for_vpc(vpc_id, params=None):
-        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=params["region"]).conn
+        ec2 = get_ec2(params)
         vpc = ec2.Vpc(vpc_id)
         vpc.wait_until_available()
         return PokeReturnValue(is_done=True, xcom_value=vpc_id)
@@ -60,12 +60,12 @@ def provision_vpc():
         dv = DagValues(params)
         ec2 = get_ec2(params)
         vpc = ec2.Vpc(vpc_id)
-        ipv6_subnet_cidr = vpc.ipv6_cidr_block_association_set[0]['Ipv6CidrBlock']
-        ipv6_subnet_cidr = ipv6_subnet_cidr[:-2] + '64'
+        # ipv6_subnet_cidr = vpc.ipv6_cidr_block_association_set[0]['Ipv6CidrBlock']
+        # ipv6_subnet_cidr = ipv6_subnet_cidr[:-2] + '64'
 
         subnet = ec2.create_subnet(
             CidrBlock=cidr,
-            Ipv6CidrBlock=ipv6_subnet_cidr,
+            # Ipv6CidrBlock=ipv6_subnet_cidr,
             VpcId=vpc_id,
             AvailabilityZone=az,
         )
@@ -85,6 +85,10 @@ def provision_vpc():
         print(f"Created Security Group: {sg_response}")
         return sg_response.id
 
+    """
+    Security groups resource docs
+    https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ec2/securitygroup/authorize_ingress.html
+    """
     @task()
     def authorize_ingress(security_group_id, params=None):
         ec2 = EC2Hook(aws_conn_id="aws_default", region_name=params["region"]).conn
@@ -99,26 +103,26 @@ def provision_vpc():
 
     @task
     def create_internet_gateway(params=None):
-        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=params["region"]).conn
+        ec2 = get_ec2(params)
         igw_response = ec2.create_internet_gateway()
         return igw_response.id
 
     @task
     def attach_internet_gateway(vpc_id, igw_gateway_id, params=None):
-        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=params["region"]).conn
+        ec2 = get_ec2(params)
         vpc = ec2.Vpc(vpc_id)
         vpc.attach_internet_gateway(InternetGatewayId=igw_gateway_id)
         print(f"Internet Gateway {igw_gateway_id} attached to VPC {vpc_id} successfully.")
 
     @task
     def create_routing_table(vpc_id, params=None):
-        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=params["region"]).conn
+        ec2 = get_ec2(params)
         route_table = ec2.create_route_table(VpcId=vpc_id)
         return route_table.id
 
     @task
     def create_route(route_table_id, igw_id, params=None):
-        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=params["region"]).conn
+        ec2 = get_ec2(params)
         route_table = ec2.RouteTable(route_table_id)
 
         route = route_table.create_route(
@@ -135,7 +139,7 @@ def provision_vpc():
 
     @task
     def associate_subnet(subnet_id, route_table_id, params=None):
-        ec2 = EC2Hook(aws_conn_id="aws_default", region_name=params["region"]).conn
+        ec2 = get_ec2(params)
         route_table = ec2.RouteTable(route_table_id)
         route_table.associate_with_subnet(SubnetId=subnet_id)
 
