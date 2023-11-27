@@ -13,7 +13,8 @@ dag_params = get_dag_params(DagParams.NAME,
                             DagParams.REGION,
                             DagParams.UBUNTU_AMI,
                             DagParams.VPC,
-                            DagParams.INSTANCE_TYPE)
+                            DagParams.INSTANCE_TYPE,
+                            DagParams.KEY_PAIR)
 
 
 @dag(dag_id=DAG_NAME,

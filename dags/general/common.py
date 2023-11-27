@@ -60,6 +60,7 @@ def provision_instance(security_group_id, subnets, tags=None, params=None):
         InstanceType=dag.instance_type,
         SecurityGroupIds=[security_group_id],
         SubnetId=subnet_id,
+        KeyName=dag.key_pair,
         TagSpecifications=[{
             'ResourceType': 'instance',
             'Tags': [{'Key': 'Name', 'Value': 'MyInstance'}]

@@ -29,6 +29,7 @@ class DagParams(Enum):
     UBUNTU_AMI = "ubuntu_ami"
     BASE_AMI = "base_ami"
     NAME = "name"
+    KEY_PAIR = "key_pair"
 
 
 class DagValues:
@@ -40,6 +41,7 @@ class DagValues:
         self.vpc = params.get(DagParams.VPC.value, None)
         self.ubuntu_ami = params.get(DagParams.UBUNTU_AMI.value, None)
         self.name = params.get(DagParams.NAME.value, None)
+        self.key_pair = params.get(DagParams.KEY_PAIR.value, None)
 
 
 class Tag(Enum):
@@ -63,7 +65,8 @@ def get_default_dag_params():
         DagParams.NUMBER_OF_INSTANCES: Param(3, type="integer", enum=[3, 6, 9, 12]),
         DagParams.VPC: Param(get_default_vpc_option(), enum=get_vpc_options()),
         DagParams.UBUNTU_AMI: Param(JLT_DEFAULT_BASE_AMI),
-        DagParams.NAME: Param("test_" + datetime.datetime.now().strftime("%H_%M"))
+        DagParams.NAME: Param("test_" + datetime.datetime.now().strftime("%H_%M")),
+        DagParams.KEY_PAIR: Param("laptop2022")
     }
 
 
